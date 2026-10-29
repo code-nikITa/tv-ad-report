@@ -7,10 +7,24 @@
 
 Python 3.10+.
 
+Linux / macOS:
+
 ```bash
-python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Если PowerShell запрещает запуск скриптов, выполните `Set-ExecutionPolicy -Scope Process RemoteSigned`
+или используйте `cmd` и `.venv\Scripts\activate.bat`.
 
 Также нужно положить в папку `data/` файлы `respondents.csv` и `views.csv`
 (`presentation_template.pptx` уже лежит там).
@@ -30,25 +44,44 @@ python main.py M_25_40_B 01.2024 06.2025 output/report.pptx
 ```bash
 export LLM_BASE_URL=https://api.openai.com/v1   # любой OpenAI-совместимый API, в т.ч. локальный
 export LLM_MODEL=<имя модели>
-export LLM_API_KEY=...   # ключ только через переменную окружения
+export LLM_API_KEY=...                          # ключ только через переменную окружения
+python main_nlp.py "Мужчины от 25 до 40 со средним доходом" 01.2024 06.2025 output/report.pptx
+```
+
+Windows (PowerShell):
+
+```powershell
+$env:LLM_BASE_URL = "https://api.openai.com/v1"
+$env:LLM_MODEL = "<имя модели>"
+$env:LLM_API_KEY = "..."
 python main_nlp.py "Мужчины от 25 до 40 со средним доходом" 01.2024 06.2025 output/report.pptx
 ```
 
 Описание аудитории отправляется в LLM через OpenAI-совместимый эндпоинт `/chat/completions`
 (`parse_with_llm` в `ad_report/nlp.py`, только стандартная библиотека). Для локальной модели
-нужно указать `LLM_BASE_URL=http://localhost:11434/v1`; `LLM_API_KEY` в этом случае не нужен.
+(например, Ollama) укажите `LLM_BASE_URL=http://localhost:11434/v1`; `LLM_API_KEY` в этом случае не нужен.
 Ответ модели проверяется теми же правилами, что и обычное выражение ЦА.
 
 Если LLM не настроена или недоступна, используется запасной разбор по правилам (`parse_rule_based`)
 с предупреждением в stderr. Он покрывает типичные русские формулировки, но на очень свободных
 формулировках может ошибаться.
 
-> Работа с реальным внешним сервисом не проверялась, т.к. нет ключа; LLM-ветка проверена на локальном
+> Работа с реальным внешним сервисом не проверялась (нет ключа); LLM-ветка проверена на локальном
 > тестовом HTTP-сервере, запасной разбор покрыт тестами. Основной интерфейс (`main.py`) от LLM не зависит.
+
+## Структура проекта
+
+- `main.py`, `main_nlp.py` — точки входа: обычный CLI и CLI с описанием аудитории текстом.
+- `ad_report/cli.py` — общие аргументы, проверка файлов и сквозной запуск: данные → расчёт → презентация.
+- `ad_report/audience.py` — разбор выражения ЦА и периода `MM.YYYY`, валидация, отбор респондентов (возраст в полных годах).
+- `ad_report/data.py` — загрузка `respondents.csv` и `views.csv` с разбором дат.
+- `ad_report/metrics.py` — охват роликов, топ-5 рекламодателей и TRP по месяцам.
+- `ad_report/presentation.py` — подстановка подзаголовка, таблицы и данных диаграммы в шаблон через python-pptx.
+- `ad_report/nlp.py` — извлечение параметров ЦА из текста: LLM по OpenAI-совместимому API и запасной разбор по правилам.
 
 ## Принятые допущения
 
-- Возраст: полных лет на последний день последнего месяца периода.
+- Возраст - полных лет на последний день последнего месяца периода.
 - Ролик «попадает в период», если в этом месяце-диапазоне у него есть хотя бы один просмотр
   (любым респондентом). Охват и TRP считаются только по просмотрам внутри периода;
   ролик без зрителей из ЦА входит в среднее с охватом 0.
